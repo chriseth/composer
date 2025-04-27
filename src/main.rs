@@ -1,6 +1,11 @@
 use std::{fs::File, io::Seek};
 
+use boolean_circuit::Node;
 use clap::{Parser, Subcommand};
+
+mod input;
+mod operations;
+mod output;
 
 /// Tool to create and compose binary circuits in AIGER format.
 #[derive(Parser)]
@@ -24,6 +29,51 @@ enum Command {
     ///
     /// Example: `composer permutation 1 0 2` creates a circuit that swaps the first two bits.
     Permutation { permutation: Vec<String> },
+
+    /// Create parallel copies of a circuit. If the circuit has `n` inputs, then
+    /// the first `n` inputs of the new circuit go to the first copy of the circuit,
+    /// the second `n` inputs go to the second copy of the circuit and so on.
+    /// The same is true for the outputs.
+    ///
+    /// Example: Assuming `xor.aig` is a file containing the XOR function on two bits,
+    /// then `composer repeat-parallel 16 xor.aig` creates a circuit with 32 inputs
+    /// and 16 outputs such that the first and the second input are XOR-ed together,
+    /// the third and fourth and so on.
+    RepeatParallel {
+        repetitions: usize,
+        input: Option<String>,
+    },
+
+    /// Create parallel copies of a circuit where the inputs and outputs are interleaved.
+    /// This means that the first input of the new circuit goes to the first input of the first
+    /// circuit, the second input of the new circuit goes to the first input of the second
+    /// circuit and so on. Similar for outputs.
+    ///
+    /// Example: Assuming `xor.aig` is a file containing the XOR function on two bits,
+    /// then `composer repeat-interleaved 16 xor.aig` creates a circuit with 32 inputs
+    /// and 16 outputs such that the first and the 17th input are XOR-ed together,
+    /// the second and the 18th and so on.
+    RepeatInterleaved {
+        repetitions: usize,
+        input: Option<String>,
+    },
+
+    RepeatSerial {
+        repetitions: usize,
+        input: Option<String>,
+    },
+
+    /// Concatenate two or more circuits serially, i.e. connects the outputs of each
+    /// circuit to the inputs of the next circuit in order.
+    /// Creates new inputs if the next circuit has more inputs than the previous circuit
+    /// and if it has fewer inputs, creates new outputs.
+    Concatenate { inputs: Vec<String> },
+
+    /// Puts two or more circuits next to each other without establishing any connections.
+    Parallel { inputs: Vec<String> },
+
+    /// Puts two or more circuits next to each other, but interleaves the inputs and outputs.
+    Interleave { inputs: Vec<String> },
 }
 
 fn main() {
@@ -35,5 +85,11 @@ fn main() {
         Command::Permutation { permutation } => {
             unimplemented!();
         }
+        Command::RepeatParallel { input, repetitions } => todo!(),
+        Command::RepeatInterleaved { input, repetitions } => todo!(),
+        Command::RepeatSerial { repetitions, input } => todo!(),
+        Command::Concatenate { inputs } => todo!(),
+        Command::Parallel { inputs } => todo!(),
+        Command::Interleave { inputs } => todo!(),
     }
 }
