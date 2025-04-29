@@ -3,6 +3,7 @@ use std::{
     process::ExitCode,
 };
 
+use bitmap::build_bitmap;
 use boolean_circuit::{
     file_formats::aiger::{to_aiger, to_aiger_binary},
     Circuit,
@@ -10,6 +11,7 @@ use boolean_circuit::{
 use clap::{Parser, Subcommand};
 use permutation::build_permutation;
 
+mod bitmap;
 mod permutation;
 
 /// Tool to create and compose binary circuits in AIGER format.
@@ -25,7 +27,11 @@ enum Command {
     /// Create a bit-mapping circuit from a lookup table given as a sequence of numbers.
     /// The length of the sequence has to be a power of two and determines the number of inputs.
     /// The magnitude of the numbers determines the number of outputs.
-    /// The `i`th number in the sequence is the output for the binary representation of `i` at the inputs.
+    ///
+    /// The `i`th number in the sequence is the output for the binary representation of `i` at
+    /// the inputs, where input `k` corresponds to the `k`th bit (counted from zero from the
+    /// lower-order end) and similarly, output `k` computes the `k`th bit of the output
+    /// (counted from zero from the lower-order end).
     ///
     /// Example: `composer bitmap 0 0 0 1` creates an AND circuit on two bits.
     Bitmap { inputs: Vec<u64> },
@@ -84,9 +90,7 @@ enum Command {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
-        Command::Bitmap { inputs: _ } => {
-            unimplemented!();
-        }
+        Command::Bitmap { inputs } => build_bitmap(&inputs).and_then(|c| write_aiger_to_stdout(&c)),
         Command::Permutation { permutation } => {
             build_permutation(permutation).and_then(|c| write_aiger_to_stdout(&c))
         }
