@@ -1,11 +1,16 @@
-use std::{fs::File, io::Seek};
+use std::{
+    io::{self, IsTerminal},
+    process::ExitCode,
+};
 
-use boolean_circuit::Node;
+use boolean_circuit::{
+    file_formats::aiger::{to_aiger, to_aiger_binary},
+    Circuit,
+};
 use clap::{Parser, Subcommand};
+use permutation::build_permutation;
 
-mod input;
-mod operations;
-mod output;
+mod permutation;
 
 /// Tool to create and compose binary circuits in AIGER format.
 #[derive(Parser)]
@@ -76,20 +81,47 @@ enum Command {
     Interleave { inputs: Vec<String> },
 }
 
-fn main() {
+fn main() -> ExitCode {
     let cli = Cli::parse();
-    match cli.command {
-        Command::Bitmap { inputs } => {
+    let result = match cli.command {
+        Command::Bitmap { inputs: _ } => {
             unimplemented!();
         }
         Command::Permutation { permutation } => {
-            unimplemented!();
+            build_permutation(permutation).and_then(|c| write_aiger_to_stdout(&c))
         }
-        Command::RepeatParallel { input, repetitions } => todo!(),
-        Command::RepeatInterleaved { input, repetitions } => todo!(),
-        Command::RepeatSerial { repetitions, input } => todo!(),
-        Command::Concatenate { inputs } => todo!(),
-        Command::Parallel { inputs } => todo!(),
-        Command::Interleave { inputs } => todo!(),
+        Command::RepeatParallel {
+            input: _,
+            repetitions: _,
+        } => todo!(),
+        Command::RepeatInterleaved {
+            input: _,
+            repetitions: _,
+        } => todo!(),
+        Command::RepeatSerial {
+            repetitions: _,
+            input: _,
+        } => todo!(),
+        Command::Concatenate { inputs: _ } => todo!(),
+        Command::Parallel { inputs: _ } => todo!(),
+        Command::Interleave { inputs: _ } => todo!(),
+    };
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("{err}");
+            ExitCode::FAILURE
+        }
     }
+}
+
+fn write_aiger_to_stdout(circuit: &Circuit) -> Result<(), String> {
+    let stdout = io::stdout();
+    let use_binary = !stdout.is_terminal();
+    if use_binary {
+        to_aiger_binary(stdout, circuit)?;
+    } else {
+        to_aiger(stdout, circuit)?;
+    }
+    Ok(())
 }
