@@ -6,8 +6,14 @@ use itertools::Itertools;
 
 pub fn build_bitmap(inputs: &[u64]) -> Result<Circuit, String> {
     let (input_bits, output_bits) = validate_inputs(inputs)?;
-    let input_gates = (0..input_bits)
-        .map(|i| Gate::from(format!("i{i}")))
+    if output_bits == 0 {
+        // No outputs, so we can return an empty circuit.
+        return Ok(Circuit::default());
+    }
+    let input_names = (0..input_bits).map(|i| format!("i{i}")).collect_vec();
+    let input_gates = input_names
+        .iter()
+        .map(|n| Gate::from(n.as_str()))
         .collect_vec();
     let output_gates = (0..output_bits).map(|bit| {
         reduce_disjunction(
@@ -29,7 +35,9 @@ pub fn build_bitmap(inputs: &[u64]) -> Result<Circuit, String> {
                 }),
         )
     });
-    Ok(Circuit::from_unnamed_outputs(output_gates))
+    Ok(Circuit::from_unnamed_outputs(output_gates)
+        .with_input_order(input_names)
+        .unwrap())
 }
 
 /// Validates the inputs and returns the number of inputs and outputs needed.
