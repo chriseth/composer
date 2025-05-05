@@ -1,17 +1,20 @@
 use std::{
+    fs::{self, File},
     io::{self, IsTerminal},
     process::ExitCode,
 };
 
 use bitmap::build_bitmap;
 use boolean_circuit::{
-    file_formats::aiger::{to_aiger, to_aiger_binary},
+    file_formats::aiger::{from_aiger, to_aiger, to_aiger_binary},
     Circuit,
 };
 use clap::{Parser, Subcommand};
+use combinations::repeat_parallel;
 use permutation::build_permutation;
 
 mod bitmap;
+mod combinations;
 mod permutation;
 
 /// Tool to create and compose binary circuits in AIGER format.
@@ -46,6 +49,9 @@ enum Command {
     /// the second `n` inputs go to the second copy of the circuit and so on.
     /// The same is true for the outputs.
     ///
+    /// Collisions between input and output names are resolved by suffixing `_i` for
+    /// decimal numbers `i`.
+    ///
     /// Example: Assuming `xor.aig` is a file containing the XOR function on two bits,
     /// then `composer repeat-parallel 16 xor.aig` creates a circuit with 32 inputs
     /// and 16 outputs such that the first and the second input are XOR-ed together,
@@ -59,6 +65,10 @@ enum Command {
     /// This means that the first input of the new circuit goes to the first input of the first
     /// circuit, the second input of the new circuit goes to the first input of the second
     /// circuit and so on. Similar for outputs.
+    ///
+    ///
+    /// Collisions between input and output names are resolved by suffixing `_i` for
+    /// decimal numbers `i`.
     ///
     /// Example: Assuming `xor.aig` is a file containing the XOR function on two bits,
     /// then `composer repeat-interleaved 16 xor.aig` creates a circuit with 32 inputs
@@ -78,12 +88,20 @@ enum Command {
     /// circuit to the inputs of the next circuit in order.
     /// Creates new inputs if the next circuit has more inputs than the previous circuit
     /// and if it has fewer inputs, creates new outputs.
+    /// Collisions between input and output names are resolved by suffixing `_i` for
+    /// decimal numbers `i`.
     Concatenate { inputs: Vec<String> },
 
     /// Puts two or more circuits next to each other without establishing any connections.
+    ///
+    /// Collisions between input and output names are resolved by suffixing `_i` for
+    /// decimal numbers `i`.
     Parallel { inputs: Vec<String> },
 
     /// Puts two or more circuits next to each other, but interleaves the inputs and outputs.
+    ///
+    /// Collisions between input and output names are resolved by suffixing `_i` for
+    /// decimal numbers `i`.
     Interleave { inputs: Vec<String> },
 }
 
@@ -94,10 +112,8 @@ fn main() -> ExitCode {
         Command::Permutation { permutation } => {
             build_permutation(permutation).and_then(|c| write_aiger_to_stdout(&c))
         }
-        Command::RepeatParallel {
-            input: _,
-            repetitions: _,
-        } => todo!(),
+        Command::RepeatParallel { input, repetitions } => read_aiger_from_file_or_stdin(&input)
+            .and_then(|c| write_aiger_to_stdout(&repeat_parallel(c, repetitions))),
         Command::RepeatInterleaved {
             input: _,
             repetitions: _,
@@ -128,4 +144,13 @@ fn write_aiger_to_stdout(circuit: &Circuit) -> Result<(), String> {
         to_aiger(stdout, circuit)?;
     }
     Ok(())
+}
+
+fn read_aiger_from_file_or_stdin(file: &Option<String>) -> Result<Circuit, String> {
+    match file {
+        None => from_aiger(io::stdin()),
+        Some(file) => {
+            from_aiger(File::open(file).map_err(|e| format!("Error opening input file: {e}"))?)
+        }
+    }
 }

@@ -1,10 +1,18 @@
-use boolean_circuit::Circuit;
+use boolean_circuit::{Circuit, Gate};
+use itertools::Itertools;
 
 pub fn build_permutation(permutation: Vec<String>) -> Result<Circuit, String> {
-    let permutation = validate_permutation(permutation)?;
+    let permutation = validate_permutation(permutation)?.collect_vec();
+    let inputs = (0..permutation.len())
+        .map(|i| format!("i{i}"))
+        .collect_vec();
     Ok(Circuit::from_unnamed_outputs(
-        permutation.map(|x| format!("i{x}").into()),
-    ))
+        permutation
+            .iter()
+            .map(|x| Gate::from(inputs[*x as usize].as_str())),
+    )
+    .with_input_order(inputs)
+    .unwrap())
 }
 
 /// Validates the input permutation and returns a vector of values between zero
