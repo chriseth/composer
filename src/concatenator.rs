@@ -125,11 +125,7 @@ impl<'a> Concatenator<'a> {
             let substitution = if circuit_index == 0 {
                 Gate::from(name.clone())
             } else {
-                // TODO create lookup table
-                let index = self.circuits[circuit_index]
-                    .input_names()
-                    .position(|n| n == name)
-                    .unwrap();
+                let index = self.input_index_by_name[circuit_index][&name];
                 if index < self.circuits[circuit_index - 1].outputs().len() {
                     let output = &self.circuits[circuit_index - 1].outputs()[index];
                     self.map_gate(circuit_index - 1, output)
@@ -143,10 +139,6 @@ impl<'a> Concatenator<'a> {
                 .insert((circuit_index, name.clone()), substitution);
         }
         self.input_name_substitutions[&(circuit_index, name)].clone()
-    }
-
-    fn allocate_new_input(&mut self, name_hint: &str) -> Gate {
-        allocate_name(name_hint, &mut self.used_input_names).into()
     }
 
     fn allocate_new_output_name(&mut self, name_hint: &String) -> String {
