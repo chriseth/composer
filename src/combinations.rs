@@ -1,5 +1,7 @@
 use boolean_circuit::{disjoint_union::disjoint_union, Circuit};
 
+use crate::concatenator::Concatenator;
+
 pub fn repeat_parallel(circuit: &Circuit, repetitions: usize) -> Circuit {
     disjoint_union(std::iter::repeat_n(circuit, repetitions))
 }
@@ -29,6 +31,16 @@ fn interleave_permutation(items: usize, repetitions: usize) -> impl Iterator<Ite
 
 pub fn concatenate<'a>(circuits: impl IntoIterator<Item = &'a Circuit>) -> Circuit {
     let circuits = circuits.into_iter().collect::<Vec<_>>();
+
+    if circuits.is_empty() {
+        return Circuit::default();
+    }
+
+    let mut concatenator = Concatenator::new(&circuits);
+    let outputs = concatenator.run();
+    Circuit::from_named_outputs(outputs)
+        .with_input_order(concatenator.new_input_name_sequence())
+        .unwrap()
 }
 
 #[cfg(test)]

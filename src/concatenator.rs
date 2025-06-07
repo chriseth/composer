@@ -2,83 +2,86 @@ use std::collections::{HashMap, HashSet};
 
 use boolean_circuit::{Circuit, Gate, Operation};
 
-pub fn concatenate<'a>(circuits: impl IntoIterator<Item = &'a Circuit>) -> Circuit {
-    let circuits = circuits.into_iter().collect::<Vec<_>>();
-
-    if circuits.is_empty() {
-        return Circuit::default();
-    }
-
-    let concatenator = Concatenator::new(&circuits);
-    let outputs = circuits
-        .last()
-        .unwrap()
-        .named_outputs()
-        .map(|(out, name)| (concatenator.map_gate(circuits.len() - 1, out), name))
-        .collect::<Vec<_>>();
-
-    Circuit::from_named_outputs(outputs.into_iter().chain(concatenator.new_outputs()))
-        .with_input_order(concatenator.input_names())
-        .unwrap()
-}
-
-struct Concatenator<'a> {
+pub struct Concatenator<'a> {
     circuits: &'a [&'a Circuit],
+    /// Map from circuit index and input name to index in the input sequence.
+    input_index_by_name: Vec<HashMap<String, usize>>,
     /// New gate by circuit index and input name.
     input_name_substitutions: HashMap<(usize, String), Gate>,
     /// New gate by circuit index and gate ID.
     gate_substitutions: HashMap<(usize, usize), Gate>,
     used_input_names: HashSet<String>,
     used_output_names: HashSet<String>,
+    /// Sequence of inputs for the concatenated circuit.
+    new_input_name_sequence: Vec<String>,
 }
 
 impl<'a> Concatenator<'a> {
     pub fn new(circuits: &'a [&'a Circuit]) -> Self {
         assert!(!circuits.is_empty(), "Cannot concatenate empty circuits");
-        let replacements = Default::default();
-        let used_input_names = circuits
+        let input_index_by_name = circuits
+            .iter()
+            .map(|circuit| {
+                circuit
+                    .input_names()
+                    .enumerate()
+                    .map(move |(index, name)| ((name.to_string()), index))
+                    .collect()
+            })
+            .collect();
+
+        // Collect the already existing input names, but only those from
+        // the first circuit are relevant.
+        let new_input_name_sequence = circuits
             .first()
             .unwrap()
             .input_names()
             .map(|n| n.to_string())
-            .collect();
+            .collect::<Vec<_>>();
+        let used_input_names = new_input_name_sequence.iter().cloned().collect();
 
         Self {
             circuits,
+            input_index_by_name,
             input_name_substitutions: Default::default(),
-            gate_substitutions: replacements,
+            gate_substitutions: Default::default(),
             used_input_names,
             used_output_names: Default::default(),
+            new_input_name_sequence,
         }
     }
 
     pub fn run(&mut self) -> Vec<(Gate, String)> {
         // Determine the "overhanging" outputs (including all outputs of the last circuit)
-        let outputs =
-            self.circuits
-                .iter()
-                .enumerate()
-                .rev()
-                .flat_map(|(circuit_index, circuit)| {
-                    // Number of inputs in the next circuit.
-                    let next_inputs = if circuit_index == self.circuits.len() - 1 {
-                        0
-                    } else {
-                        // TODO store those in efficient index or at least vec
-                        self.circuits[circuit_index + 1].input_names().count()
-                    };
-                    circuit
-                        .named_outputs()
-                        .skip(next_inputs)
-                        .map(move |(gate, name)| (circuit_index, gate, name))
-                });
+        let outputs = self
+            .circuits
+            .iter()
+            .enumerate()
+            .rev()
+            .flat_map(|(circuit_index, circuit)| {
+                // Number of inputs in the next circuit.
+                let next_inputs = self
+                    .input_index_by_name
+                    .get(circuit_index + 1)
+                    .map_or(0, |map| map.len());
+                circuit
+                    .named_outputs()
+                    .skip(next_inputs)
+                    .map(move |(gate, name)| (circuit_index, gate, name))
+            })
+            .collect::<Vec<_>>();
         outputs
+            .into_iter()
             .map(|(circuit_index, gate, name)| {
                 let name = self.allocate_new_output_name(name);
                 let gate = self.map_gate(circuit_index, gate);
                 (gate, name)
             })
             .collect()
+    }
+
+    pub fn new_input_name_sequence(&self) -> Vec<String> {
+        self.new_input_name_sequence.clone()
     }
 
     fn map_gate(&mut self, circuit_index: usize, gate: &Gate) -> Gate {
@@ -131,7 +134,9 @@ impl<'a> Concatenator<'a> {
                     let output = &self.circuits[circuit_index - 1].outputs()[index];
                     self.map_gate(circuit_index - 1, output)
                 } else {
-                    self.allocate_new_input(&name)
+                    let new_input_name = allocate_name(&name, &mut self.used_input_names);
+                    self.new_input_name_sequence.push(new_input_name.clone());
+                    Gate::from(new_input_name)
                 }
             };
             self.input_name_substitutions

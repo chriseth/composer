@@ -114,7 +114,7 @@ fn main() -> ExitCode {
             .into_iter()
             .map(|input| read_aiger_from_file_or_stdin(&Some(input)))
             .collect::<Result<Vec<_>, _>>()
-            .and_then(|circuits| write_aiger_to_stdout(&concatenate(circuits))),
+            .and_then(|circuits| write_aiger_to_stdout(&concatenate(&circuits))),
         Command::Parallel { inputs: _ } => todo!(),
         Command::Interleave { inputs: _ } => todo!(),
     };
