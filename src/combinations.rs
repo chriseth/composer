@@ -189,7 +189,7 @@ mod test {
         ]);
         let circuit2 = Circuit::from_named_outputs([(!Gate::from("x"), "o3")]);
         let concatenated_circuit = concatenate([&circuit1, &circuit2]);
-        assert_eq!(concatenated_circuit.output_names(), vec!["o3", "o3_1"]);
+        assert_eq!(concatenated_circuit.output_names(), vec!["o3", "o_1"]);
         assert_eq!(
             concatenated_circuit.input_names().collect::<Vec<_>>(),
             vec!["a", "b"]
