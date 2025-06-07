@@ -1,5 +1,7 @@
 use boolean_circuit::{disjoint_union::disjoint_union, Circuit};
 
+use crate::concatenator::Concatenator;
+
 pub fn repeat_parallel(circuit: &Circuit, repetitions: usize) -> Circuit {
     disjoint_union(std::iter::repeat_n(circuit, repetitions))
 }
@@ -25,6 +27,20 @@ pub fn repeat_interleaved(circuit: &Circuit, repetitions: usize) -> Circuit {
 fn interleave_permutation(items: usize, repetitions: usize) -> impl Iterator<Item = usize> {
     (0..items)
         .flat_map(move |index| (0..repetitions).map(move |repetition| index + repetition * items))
+}
+
+pub fn concatenate<'a>(circuits: impl IntoIterator<Item = &'a Circuit>) -> Circuit {
+    let circuits = circuits.into_iter().collect::<Vec<_>>();
+
+    if circuits.is_empty() {
+        return Circuit::default();
+    }
+
+    let mut concatenator = Concatenator::new(&circuits);
+    let outputs = concatenator.run();
+    Circuit::from_named_outputs(outputs)
+        .with_input_order(concatenator.new_input_name_sequence())
+        .unwrap()
 }
 
 #[cfg(test)]
@@ -137,5 +153,87 @@ mod test {
         assert!(repeated_circuit.outputs().is_empty());
         assert!(repeated_circuit.input_names().next().is_none());
         assert!(repeated_circuit.output_names().is_empty());
+    }
+
+    #[test]
+    fn concatenate_empty() {
+        let concatenated_circuit = concatenate([]);
+        assert!(concatenated_circuit.outputs().is_empty());
+        assert!(concatenated_circuit.input_names().next().is_none());
+        assert!(concatenated_circuit.output_names().is_empty());
+    }
+
+    #[test]
+    fn concatenate_fitting() {
+        let circuit1 = Circuit::from_named_outputs([(Gate::from("a") & Gate::from("b"), "o1")])
+            .with_input_order(["a", "b"])
+            .unwrap();
+        let circuit2 = Circuit::from_named_outputs([(!Gate::from("b"), "o2")]);
+        let concatenated_circuit = concatenate([&circuit1, &circuit2]);
+        assert_eq!(concatenated_circuit.output_names(), vec!["o2"]);
+        assert_eq!(
+            concatenated_circuit.input_names().collect::<Vec<_>>(),
+            vec!["a", "b"]
+        );
+        assert_eq!(
+            concatenated_circuit.outputs()[0].to_string_as_tree(),
+            "!(a & b)"
+        );
+    }
+
+    #[test]
+    fn concatenate_surplus_outputs() {
+        let circuit1 = Circuit::from_named_outputs([
+            (Gate::from("a") & Gate::from("b"), "o1"),
+            (Gate::from("a") | Gate::from("b"), "o3"),
+        ]);
+        let circuit2 = Circuit::from_named_outputs([(!Gate::from("x"), "o3")]);
+        let concatenated_circuit = concatenate([&circuit1, &circuit2]);
+        assert_eq!(concatenated_circuit.output_names(), vec!["o3", "o_1"]);
+        assert_eq!(
+            concatenated_circuit.input_names().collect::<Vec<_>>(),
+            vec!["a", "b"]
+        );
+        assert_eq!(
+            concatenated_circuit.outputs()[0].to_string_as_tree(),
+            "!(a & b)"
+        );
+        assert_eq!(
+            concatenated_circuit.outputs()[1].to_string_as_tree(),
+            "(a | b)"
+        );
+    }
+
+    #[test]
+    fn concatenate_surplus_inputs() {
+        let circuit1 = Circuit::from_named_outputs([(Gate::from("a") & Gate::from("b"), "o1")]);
+        let circuit2 = Circuit::from_named_outputs([(!Gate::from("x") | Gate::from("a"), "o3")]);
+        let concatenated_circuit = concatenate([&circuit1, &circuit2]);
+        assert_eq!(concatenated_circuit.output_names(), vec!["o3"]);
+        assert_eq!(
+            concatenated_circuit.input_names().collect::<Vec<_>>(),
+            vec!["a", "b", "a_1"]
+        );
+        assert_eq!(
+            concatenated_circuit.outputs()[0].to_string_as_tree(),
+            "(!(a & b) | a_1)"
+        );
+    }
+
+    #[test]
+    fn concatenate_self() {
+        let circuit = Circuit::from_named_outputs([
+            (Gate::from("a") & Gate::from("b"), "o1"),
+            (Gate::from("a") | Gate::from("b"), "o3"),
+        ]);
+        let concatenated_circuit = concatenate([&circuit, &circuit, &circuit, &circuit]);
+        assert_eq!(concatenated_circuit.output_names(), vec!["o1", "o3"]);
+        assert_eq!(
+            concatenated_circuit.input_names().collect::<Vec<_>>(),
+            vec!["a", "b"]
+        );
+        let gate_count = concatenated_circuit.iter().count();
+        // Test that it created independent gates.
+        assert_eq!(gate_count, 10);
     }
 }
