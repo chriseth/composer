@@ -12,13 +12,14 @@ use clap::{Parser, Subcommand};
 
 mod bitmap;
 mod combinations;
+mod concatenator;
 mod permutation;
 
 use bitmap::build_bitmap;
 use combinations::repeat_parallel;
 use permutation::build_permutation;
 
-use crate::combinations::repeat_interleaved;
+use crate::combinations::{concatenate, repeat_interleaved};
 
 /// Tool to create and compose binary circuits in AIGER format.
 #[derive(Parser)]
@@ -109,7 +110,11 @@ fn main() -> ExitCode {
             repetitions: _,
             input: _,
         } => todo!(),
-        Command::Concatenate { inputs: _ } => todo!(),
+        Command::Concatenate { inputs } => inputs
+            .into_iter()
+            .map(|input| read_aiger_from_file_or_stdin(&Some(input)))
+            .collect::<Result<Vec<_>, _>>()
+            .and_then(|circuits| write_aiger_to_stdout(&concatenate(circuits))),
         Command::Parallel { inputs: _ } => todo!(),
         Command::Interleave { inputs: _ } => todo!(),
     };

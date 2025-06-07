@@ -27,6 +27,10 @@ fn interleave_permutation(items: usize, repetitions: usize) -> impl Iterator<Ite
         .flat_map(move |index| (0..repetitions).map(move |repetition| index + repetition * items))
 }
 
+pub fn concatenate<'a>(circuits: impl IntoIterator<Item = &'a Circuit>) -> Circuit {
+    let circuits = circuits.into_iter().collect::<Vec<_>>();
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
