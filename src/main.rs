@@ -18,6 +18,8 @@ use bitmap::build_bitmap;
 use combinations::repeat_parallel;
 use permutation::build_permutation;
 
+use crate::combinations::repeat_interleaved;
+
 /// Tool to create and compose binary circuits in AIGER format.
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -100,11 +102,9 @@ fn main() -> ExitCode {
             build_permutation(permutation).and_then(|c| write_aiger_to_stdout(&c))
         }
         Command::RepeatParallel { input, repetitions } => read_aiger_from_file_or_stdin(&input)
-            .and_then(|c| write_aiger_to_stdout(&repeat_parallel(c, repetitions))),
-        Command::RepeatInterleaved {
-            input: _,
-            repetitions: _,
-        } => todo!(),
+            .and_then(|c| write_aiger_to_stdout(&repeat_parallel(&c, repetitions))),
+        Command::RepeatInterleaved { input, repetitions } => read_aiger_from_file_or_stdin(&input)
+            .and_then(|c| write_aiger_to_stdout(&repeat_interleaved(&c, repetitions))),
         Command::RepeatSerial {
             repetitions: _,
             input: _,
