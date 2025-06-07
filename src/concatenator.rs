@@ -125,14 +125,16 @@ impl<'a> Concatenator<'a> {
             let substitution = if circuit_index == 0 {
                 Gate::from(name.clone())
             } else {
-                let index = self.input_index_by_name[circuit_index][&name];
-                if index < self.circuits[circuit_index - 1].outputs().len() {
-                    let output = &self.circuits[circuit_index - 1].outputs()[index];
-                    self.map_gate(circuit_index - 1, output)
-                } else {
-                    let new_input_name = allocate_name(&name, &mut self.used_input_names);
-                    self.new_input_name_sequence.push(new_input_name.clone());
-                    Gate::from(new_input_name)
+                let input_index = self.input_index_by_name[circuit_index][&name];
+                match self.circuits[circuit_index - 1].outputs().get(input_index) {
+                    Some(output) => self.map_gate(circuit_index - 1, output),
+                    None => {
+                        // This circuit has more inputs than the previous has outputs.
+                        // Allocate a new input.
+                        let new_input_name = allocate_name(&name, &mut self.used_input_names);
+                        self.new_input_name_sequence.push(new_input_name.clone());
+                        Gate::from(new_input_name)
+                    }
                 }
             };
             self.input_name_substitutions
