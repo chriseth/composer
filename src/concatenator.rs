@@ -86,27 +86,28 @@ impl<'a> Concatenator<'a> {
 
     fn map_gate(&mut self, circuit_index: usize, gate: &Gate) -> Gate {
         for g in gate.post_visit_iter() {
-            if !self
+            if self
                 .gate_substitutions
                 .contains_key(&(circuit_index, g.id()))
             {
-                let substitution = match g.operation() {
-                    Operation::Variable(name) => self.map_input(circuit_index, name),
-                    Operation::Constant(value) => Gate::from(*value),
-                    Operation::Negation(inner) => !self.sub(circuit_index, inner),
-                    Operation::Conjunction(left, right) => {
-                        self.sub(circuit_index, left) & self.sub(circuit_index, right)
-                    }
-                    Operation::Disjunction(left, right) => {
-                        self.sub(circuit_index, left) | self.sub(circuit_index, right)
-                    }
-                    Operation::Xor(left, right) => {
-                        self.sub(circuit_index, left) ^ self.sub(circuit_index, right)
-                    }
-                };
-                self.gate_substitutions
-                    .insert((circuit_index, g.id()), substitution);
+                continue;
             }
+            let substitution = match g.operation() {
+                Operation::Variable(name) => self.map_input(circuit_index, name),
+                Operation::Constant(value) => Gate::from(*value),
+                Operation::Negation(inner) => !self.sub(circuit_index, inner),
+                Operation::Conjunction(left, right) => {
+                    self.sub(circuit_index, left) & self.sub(circuit_index, right)
+                }
+                Operation::Disjunction(left, right) => {
+                    self.sub(circuit_index, left) | self.sub(circuit_index, right)
+                }
+                Operation::Xor(left, right) => {
+                    self.sub(circuit_index, left) ^ self.sub(circuit_index, right)
+                }
+            };
+            self.gate_substitutions
+                .insert((circuit_index, g.id()), substitution);
         }
         self.sub(circuit_index, gate)
     }
@@ -118,32 +119,34 @@ impl<'a> Concatenator<'a> {
 
     fn map_input(&mut self, circuit_index: usize, name: &str) -> Gate {
         let name = name.to_string();
-        if !self
+        if let Some(g) = self
             .input_name_substitutions
-            .contains_key(&(circuit_index, name.clone()))
+            .get(&(circuit_index, name.clone()))
         {
-            let substitution = if circuit_index == 0 {
-                Gate::from(name.clone())
-            } else {
-                let input_index = self.input_index_by_name[circuit_index][&name];
-                match self.circuits[circuit_index - 1].outputs().get(input_index) {
-                    Some(output) => self.map_gate(circuit_index - 1, output),
-                    None => {
-                        // This circuit has more inputs than the previous has outputs.
-                        // Allocate a new input.
-                        let new_input_name = allocate_name(&name, &mut self.used_input_names);
-                        self.new_input_name_sequence.push(new_input_name.clone());
-                        Gate::from(new_input_name)
-                    }
-                }
-            };
-            self.input_name_substitutions
-                .insert((circuit_index, name.clone()), substitution);
+            return g.clone();
         }
-        self.input_name_substitutions[&(circuit_index, name)].clone()
+
+        let substitution = if circuit_index == 0 {
+            Gate::from(name.clone())
+        } else {
+            let input_index = self.input_index_by_name[circuit_index][&name];
+            match self.circuits[circuit_index - 1].outputs().get(input_index) {
+                Some(output) => self.map_gate(circuit_index - 1, output),
+                None => {
+                    // This circuit has more inputs than the previous has outputs.
+                    // Allocate a new input.
+                    let new_input_name = allocate_name(&name, &mut self.used_input_names);
+                    self.new_input_name_sequence.push(new_input_name.clone());
+                    Gate::from(new_input_name)
+                }
+            }
+        };
+        self.input_name_substitutions
+            .insert((circuit_index, name.clone()), substitution.clone());
+        substitution
     }
 
-    fn allocate_new_output_name(&mut self, name_hint: &String) -> String {
+    fn allocate_new_output_name(&mut self, name_hint: &str) -> String {
         if name_hint.is_empty() {
             return String::new();
         }
