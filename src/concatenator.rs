@@ -10,8 +10,8 @@ pub struct Concatenator<'a> {
     input_name_substitutions: HashMap<(usize, String), Gate>,
     /// New gate by circuit index and gate ID.
     gate_substitutions: HashMap<(usize, usize), Gate>,
-    used_input_names: HashSet<String>,
-    used_output_names: HashSet<String>,
+    input_name_allocator: NameAllocator,
+    output_name_allocator: NameAllocator,
     /// Sequence of inputs for the concatenated circuit.
     new_input_name_sequence: Vec<String>,
 }
@@ -38,15 +38,15 @@ impl<'a> Concatenator<'a> {
             .input_names()
             .map(|n| n.to_string())
             .collect::<Vec<_>>();
-        let used_input_names = new_input_name_sequence.iter().cloned().collect();
+        let input_name_allocator = NameAllocator::new(&new_input_name_sequence);
 
         Self {
             circuits,
             input_index_by_name,
             input_name_substitutions: Default::default(),
             gate_substitutions: Default::default(),
-            used_input_names,
-            used_output_names: Default::default(),
+            input_name_allocator,
+            output_name_allocator: Default::default(),
             new_input_name_sequence,
         }
     }
@@ -135,7 +135,7 @@ impl<'a> Concatenator<'a> {
                 None => {
                     // This circuit has more inputs than the previous has outputs.
                     // Allocate a new input.
-                    let new_input_name = allocate_name(&name, &mut self.used_input_names);
+                    let new_input_name = self.input_name_allocator.allocate_name(&name);
                     self.new_input_name_sequence.push(new_input_name.clone());
                     Gate::from(new_input_name)
                 }
@@ -148,21 +148,39 @@ impl<'a> Concatenator<'a> {
 
     fn allocate_new_output_name(&mut self, name_hint: &str) -> String {
         if name_hint.is_empty() {
-            return String::new();
+            String::new()
+        } else {
+            self.output_name_allocator.allocate_name(name_hint)
         }
-        allocate_name(name_hint, &mut self.used_output_names)
     }
 }
 
-fn allocate_name(name_hint: &str, used_names: &mut HashSet<String>) -> String {
-    let mut name = name_hint.to_string();
-    let mut counter = 1;
-    // TODO if we get multiple clashes, this could take quite long because we always start
-    // counting from 1. Also we could remove a `_%d` suffix from the hint.
-    while used_names.contains(&name) {
-        name = format!("{name_hint}_{counter}");
-        counter += 1;
+#[derive(Default)]
+struct NameAllocator {
+    used_names: HashSet<String>,
+    counters: HashMap<String, usize>,
+}
+
+impl NameAllocator {
+    fn new<S: ToString>(used_names: impl IntoIterator<Item = S>) -> Self {
+        Self {
+            used_names: used_names.into_iter().map(|s| s.to_string()).collect(),
+            counters: HashMap::new(),
+        }
     }
-    used_names.insert(name.clone());
-    name
+
+    fn allocate_name(&mut self, name_hint: &str) -> String {
+        if self.used_names.insert(name_hint.to_string()) {
+            return name_hint.to_string();
+        }
+        let stem = name_hint.trim_end_matches(|c: char| c.is_ascii_digit() || c == '_');
+        let counter = self.counters.entry(stem.to_string()).or_insert(1);
+        loop {
+            let name = format!("{name_hint}_{counter}");
+            *counter += 1;
+            if self.used_names.insert(name.clone()) {
+                return name;
+            }
+        }
+    }
 }
