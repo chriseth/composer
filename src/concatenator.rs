@@ -176,11 +176,28 @@ impl NameAllocator {
         let stem = name_hint.trim_end_matches(|c: char| c.is_ascii_digit() || c == '_');
         let counter = self.counters.entry(stem.to_string()).or_insert(1);
         loop {
-            let name = format!("{name_hint}_{counter}");
+            let name = format!("{stem}_{counter}");
             *counter += 1;
             if self.used_names.insert(name.clone()) {
                 return name;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn name_allocation() {
+        let mut allocator = NameAllocator::new(["a", "b", "c"]);
+        assert_eq!(allocator.allocate_name("a"), "a_1");
+        assert_eq!(allocator.allocate_name("a_4"), "a_4");
+        assert_eq!(allocator.allocate_name("a_1"), "a_2");
+        assert_eq!(allocator.allocate_name("a_1"), "a_3");
+        assert_eq!(allocator.allocate_name("a_1"), "a_5");
+        assert_eq!(allocator.allocate_name("b"), "b_1");
+        assert_eq!(allocator.allocate_name("c"), "c_1");
     }
 }
